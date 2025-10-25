@@ -1,0 +1,24 @@
+{
+    "name": "com.luanrobs.inspector-screenshot",
+    "version": "1.0.0",
+    "displayName": "Inspector Screenshot Utility",
+    "description": "A Unity Editor tool to capture screenshots of ScriptableObjects in the Inspector (optional integration with Tri Inspector).",
+    "unity": "2020.3",
+    "author": {
+        "name": "Luanrobs",
+        "email": "luanrobs@exemplo.com",
+        "url": "https://github.com/luanrobs"
+    },
+    "keywords": [
+        "editor",
+        "screenshot",
+        "scriptableobject",
+        "triinspector",
+        "package"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/luanrobs/inspector-screenshot-utility.git",
+        "revision": "1.0.0"
+    }
+}
