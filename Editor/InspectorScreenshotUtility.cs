@@ -113,7 +113,7 @@ public static class InspectorScreenshotUtility
             if (requestCapture && Event.current.type == EventType.Repaint)
             {
                 requestCapture = false;
-                CaptureInspectorOnly();
+                CaptureInspectorOnly(1.2f, ScreenshotLook.Crisp);
             }
             
             if (autoCapture && Event.current.type == EventType.Repaint)
@@ -165,7 +165,13 @@ public static class InspectorScreenshotUtility
             EditorApplication.delayCall += () => { if (this != null) Repaint(); };
         }
 
-        private void CaptureInspectorOnly()
+
+        private enum ScreenshotLook
+        {
+            Default,
+            Crisp
+        }
+        private void CaptureInspectorOnly(float Scale = 1f, ScreenshotLook SelectedLook = ScreenshotLook.Default)
         {
             int winW = Mathf.RoundToInt(position.width);
             int winH = Mathf.RoundToInt(position.height);
@@ -174,13 +180,16 @@ public static class InspectorScreenshotUtility
 
             int captureH = winH - contentY - scriptY;
             var contentTex = new Texture2D(winW, captureH, TextureFormat.RGBA32, false);
+            contentTex.wrapMode = TextureWrapMode.Clamp;
             contentTex.ReadPixels(new Rect(0, 0, winW, captureH), 0, 0);
             contentTex.Apply();
 
             int finalW = FixedWidth;
-            int paddingTop = 40;
-            int paddingBottom = 40;
-            int finalH = captureH + paddingTop + paddingBottom;
+            int paddingTop = 30;
+            int paddingBottom = 30;
+
+            int scaledH = Mathf.RoundToInt(captureH * Scale);
+            int finalH = scaledH + paddingTop + paddingBottom;
 
             var finalTex = new Texture2D(finalW, finalH, TextureFormat.RGBA32, false);
 
@@ -189,16 +198,19 @@ public static class InspectorScreenshotUtility
                 bg[i] = BackgroundColor;
             finalTex.SetPixels(bg);
 
-            float scale = (float)captureH / captureH;
-            int scaledW = winW;
+            float scale = (float)Scale;
+            int scaledW = Mathf.RoundToInt(winW * scale);
             int offsetX = (finalW - scaledW) / 2;
             int offsetY = paddingBottom;
 
-            for (int y = 0; y < captureH; y++)
+            for (int y = 0; y < scaledH; y++)
             {
-                for (int x = 0; x < winW; x++)
+                for (int x = 0; x < scaledW; x++)
                 {
-                    Color c = contentTex.GetPixel(x, y);
+                    float srcX = (x + 0.5f) / scale;
+                    float srcY = (y + 0.5f) / scale;
+                    Color c = contentTex.GetPixelBilinear(srcX / winW, srcY / captureH);
+
                     int targetX = Mathf.Clamp(offsetX + x, 0, finalW - 1);
                     int targetY = Mathf.Clamp(offsetY + y, 0, finalH - 1);
                     finalTex.SetPixel(targetX, targetY, c);
@@ -206,9 +218,13 @@ public static class InspectorScreenshotUtility
             }
 
             finalTex.Apply();
-            ApplyRoundedCorners(finalTex, 6);
 
-            string defaultName = $"{targetInstance.name}_Inspector.png";
+            ApplyRoundedCorners(finalTex, 12);
+            ApplyPostTone(finalTex, SelectedLook);
+
+            string sufixToRemove = "_Clone";
+            int sufixStartIndex = targetInstance.name.Length - sufixToRemove.Length;
+            string defaultName = $"{targetInstance.name.Remove(sufixStartIndex, sufixToRemove.Length)}_Inspector.png";
             string path = EditorUtility.SaveFilePanel(
                 "Salvar Screenshot do Inspector",
                 Application.dataPath,
@@ -223,11 +239,6 @@ public static class InspectorScreenshotUtility
                 AssetDatabase.Refresh();
                 EditorUtility.RevealInFinder(path);
             }
-            else
-            {
-                
-            }
-
 
             if (lastScreenshot != null)
                 DestroyImmediate(lastScreenshot);
@@ -236,6 +247,102 @@ public static class InspectorScreenshotUtility
             DestroyImmediate(contentTex);
             Repaint();
         }
+        private void ApplyPostTone(Texture2D tex, ScreenshotLook SelectedLook)
+        {
+            float sharpenIntensity;
+            float contrastPower;
+            float midtoneBoost;
+            float gammaCorrection;
+            float alphaSoftness;
+
+            switch (SelectedLook)
+            {
+                default:
+                case ScreenshotLook.Default:
+                    sharpenIntensity = 0.0f;
+                    contrastPower = 1.0f;
+                    midtoneBoost = 0.0f;
+                    gammaCorrection = 1.0f;
+                    alphaSoftness = 1.0f;
+                    break;
+
+                case ScreenshotLook.Crisp:
+                    sharpenIntensity = 0.3f;
+                    contrastPower = 1.06f;
+                    midtoneBoost = 0.01f;
+                    gammaCorrection = 1.03f;
+                    alphaSoftness = 1.05f;
+                    break;
+            }
+
+            if (sharpenIntensity > 0f)
+                ApplySharpen(tex, sharpenIntensity);
+
+            int w = tex.width;
+            int h = tex.height;
+            var pixels = tex.GetPixels();
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                Color c = pixels[i];
+
+                float avg = (c.r + c.g + c.b) / 3f;
+                float contrast = Mathf.Lerp(1f, contrastPower, avg);
+                c.r = Mathf.Pow(c.r * contrast, gammaCorrection);
+                c.g = Mathf.Pow(c.g * contrast, gammaCorrection);
+                c.b = Mathf.Pow(c.b * contrast, gammaCorrection);
+
+                c.r = Mathf.Clamp01(Mathf.Lerp(c.r, 1f, midtoneBoost));
+                c.g = Mathf.Clamp01(Mathf.Lerp(c.g, 1f, midtoneBoost));
+                c.b = Mathf.Clamp01(Mathf.Lerp(c.b, 1f, midtoneBoost));
+
+                if (c.a < 1f)
+                    c.a = Mathf.Pow(c.a, alphaSoftness);
+
+                pixels[i] = c;
+            }
+
+            tex.SetPixels(pixels);
+            tex.Apply();
+        }
+
+        private void ApplySharpen(Texture2D tex, float intensity = 0.6f)
+        {
+            int w = tex.width;
+            int h = tex.height;
+            var original = tex.GetPixels();
+            var result = new Color[original.Length];
+
+            int[] offsetX = { -1, 0, 1, -1, 0, 1, -1, 0, 1 };
+            int[] offsetY = { -1, -1, -1, 0, 0, 0, 1, 1, 1 };
+            float[] kernel = {
+            0, -1, 0,
+            -1, 5, -1,
+            0, -1, 0
+        };
+
+            for (int y = 1; y < h - 1; y++)
+            {
+                for (int x = 1; x < w - 1; x++)
+                {
+                    Color sum = Color.black;
+                    for (int k = 0; k < 9; k++)
+                    {
+                        int xx = Mathf.Clamp(x + offsetX[k], 0, w - 1);
+                        int yy = Mathf.Clamp(y + offsetY[k], 0, h - 1);
+                        sum += tex.GetPixel(xx, yy) * kernel[k];
+                    }
+
+                    int idx = y * w + x;
+                    result[idx] = Color.Lerp(original[idx], sum, intensity);
+                }
+            }
+
+            tex.SetPixels(result);
+            tex.Apply();
+        }
+        
+
 
         private void ApplyRoundedCorners(Texture2D tex, int radius, float feather = 1f)
         {
