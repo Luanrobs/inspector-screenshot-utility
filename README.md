@@ -33,8 +33,7 @@ If the **Tri Inspector** package is installed, a **📸 Take Screenshot** button
 
 ## Screenshot:
 
-<img width="1000" height="198" alt="Slider_Inspector" src="https://github.com/user-attachments/assets/d60fff14-78af-44ee-9b5d-3053cac6ad2d" />
-
+<img width="1000" height="188" alt="Slider_Inspector" src="https://github.com/user-attachments/assets/7943e2a9-3396-4308-b826-d2c859d6dce1" />
 
 
 ## How to Install
